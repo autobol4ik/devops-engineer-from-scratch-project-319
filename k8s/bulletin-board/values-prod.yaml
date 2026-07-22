@@ -1,0 +1,29 @@
+replicaCount: 2
+
+existingSecret: hexlet-5-app-managed
+
+service:
+  type: NodePort
+  nodePort: 30080
+
+ingress:
+  enabled: true
+  className: gwin-default
+  groupName: hexlet-5-bulletin-board
+  externalIPv4Address: auto
+  securityGroupId: REPLACE_WITH_GWIN_SECURITY_GROUP_ID
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+topologySpread:
+  enabled: true
+
+serviceMonitor:
+  enabled: true
+
+externalSecret:
+  enabled: true
+  targetSecretName: hexlet-5-app-managed
+  lockboxId: REPLACE_WITH_LOCKBOX_ID

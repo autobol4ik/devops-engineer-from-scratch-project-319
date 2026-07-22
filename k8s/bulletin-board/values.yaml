@@ -1,0 +1,89 @@
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: hexlet-5-bulletin-board
+
+image:
+  repository: autobol4ik/hexlet-5-bulletin-board
+  tag: REPLACE_WITH_FULL_GIT_SHA
+  pullPolicy: IfNotPresent
+
+config:
+  SPRING_PROFILES_ACTIVE: prod
+  MANAGEMENT_SERVER_PORT: "9090"
+  SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 30s
+  STORAGE_S3_REGION: ru-central1
+  STORAGE_S3_ENDPOINT: https://storage.yandexcloud.net
+
+existingSecret: hexlet-5-app
+
+bootstrapSecret:
+  create: false
+  stringData: {}
+
+externalSecret:
+  enabled: false
+  targetSecretName: hexlet-5-app-managed
+  refreshInterval: 1h
+  secretStoreName: hexlet-5-application
+  lockboxId: ""
+  data:
+    - secretKey: SPRING_DATASOURCE_URL
+      property: SPRING_DATASOURCE_URL
+    - secretKey: SPRING_DATASOURCE_USERNAME
+      property: SPRING_DATASOURCE_USERNAME
+    - secretKey: SPRING_DATASOURCE_PASSWORD
+      property: SPRING_DATASOURCE_PASSWORD
+    - secretKey: STORAGE_S3_BUCKET
+      property: STORAGE_S3_BUCKET
+    - secretKey: STORAGE_S3_ACCESSKEY
+      property: STORAGE_S3_ACCESSKEY
+    - secretKey: STORAGE_S3_SECRETKEY
+      property: STORAGE_S3_SECRETKEY
+
+service:
+  type: ClusterIP
+  port: 80
+  nodePort: null
+
+metricsService:
+  port: 9090
+
+ingress:
+  enabled: false
+  className: gwin-default
+  groupName: hexlet-5-bulletin-board
+  externalIPv4Address: auto
+  securityGroupId: ""
+  path: /
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+topologySpread:
+  enabled: false
+  maxSkew: 1
+  minDomains: 2
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: DoNotSchedule
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  metricRelabelings:
+    - action: keep
+      sourceLabels:
+        - __name__
+      regex: ^http_server_requests_seconds_(bucket|count|sum)$
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+terminationGracePeriodSeconds: 60

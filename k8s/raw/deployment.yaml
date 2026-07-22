@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hexlet-5-bulletin-board
+  namespace: hexlet-5
+  labels:
+    app.kubernetes.io/name: bulletin-board
+    app.kubernetes.io/instance: hexlet-5
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bulletin-board
+      app.kubernetes.io/instance: hexlet-5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bulletin-board
+        app.kubernetes.io/instance: hexlet-5
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: application
+          image: autobol4ik/hexlet-5-bulletin-board:REPLACE_WITH_FULL_GIT_SHA
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: hexlet-5-bulletin-board
+            - secretRef:
+                name: hexlet-5-app
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep 15
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
