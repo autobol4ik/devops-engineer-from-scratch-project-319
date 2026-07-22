@@ -1,0 +1,21 @@
+---
+name: Raw Kubernetes manifests
+
+"on":
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.34.0
+      - name: Render raw and scaled manifests
+        run: |
+          kubectl kustomize k8s/raw > "$RUNNER_TEMP/raw.yaml"
+          kubectl kustomize k8s/scaled > "$RUNNER_TEMP/scaled.yaml"

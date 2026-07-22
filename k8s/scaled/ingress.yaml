@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hexlet-5-bulletin-board
+  namespace: hexlet-5
+  labels:
+    app.kubernetes.io/name: bulletin-board
+    app.kubernetes.io/instance: hexlet-5
+  annotations:
+    gwin.yandex.cloud/groupName: hexlet-5-bulletin-board
+    gwin.yandex.cloud/externalIPv4Address: auto
+    gwin.yandex.cloud/securityGroups: REPLACE_WITH_GWIN_SECURITY_GROUP_ID
+spec:
+  ingressClassName: gwin-default
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hexlet-5-bulletin-board
+                port:
+                  number: 80

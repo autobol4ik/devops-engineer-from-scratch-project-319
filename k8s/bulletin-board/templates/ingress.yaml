@@ -1,0 +1,27 @@
+{{- if .Values.ingress.enabled }}
+{{- if ne .Values.service.type "NodePort" }}
+{{- fail "Gwin Ingress requires service.type=NodePort" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "bulletin-board.fullname" . }}
+  labels:
+    {{- include "bulletin-board.labels" . | nindent 4 }}
+  annotations:
+    gwin.yandex.cloud/groupName: {{ required "ingress.groupName is required" .Values.ingress.groupName | quote }}
+    gwin.yandex.cloud/externalIPv4Address: {{ .Values.ingress.externalIPv4Address | quote }}
+    gwin.yandex.cloud/securityGroups: {{ required "ingress.securityGroupId is required" .Values.ingress.securityGroupId | quote }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "bulletin-board.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

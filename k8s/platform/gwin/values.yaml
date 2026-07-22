@@ -1,0 +1,49 @@
+# Chart: oci://cr.yandex/yc-marketplace/yandex-cloud/gwin/charts/gwin-chart
+# Version: v1.8.2
+# OCI manifest: sha256:3de9e0e4c5d213ac92102c370161be7a603dcc24de16f0fc3744584c022994fe
+
+global:
+  image:
+    pullPolicy: IfNotPresent
+
+controller:
+  folderId: REPLACE_WITH_FOLDER_ID
+  debugLogs: false
+  cloudLabelsPrefix: hexlet-5-
+  cloudLabelsOwner: gwin
+  ycServiceAccount:
+    workloadIdentityFederation:
+      serviceAccountID: REPLACE_WITH_GWIN_SERVICE_ACCOUNT_ID
+  names:
+    deployment: hexlet-5-gwin
+    serviceAccount: gwin
+    clusterRole: hexlet-5-gwin
+    clusterRoleBinding: hexlet-5-gwin
+  labels:
+    app: hexlet-5-gwin
+
+gatewayClass:
+  create: false
+
+ingressClass:
+  create: true
+  name: gwin-default
+
+nodecheck:
+  enabled: true
+  names:
+    daemonset: hexlet-5-gwin-nodecheck
+    serviceAccount: hexlet-5-gwin-nodecheck
+    service: hexlet-5-gwin-nodecheck
+    clusterRole: hexlet-5-gwin-nodecheck
+    clusterRoleBinding: hexlet-5-gwin-nodecheck
+  labels:
+    app: hexlet-5-gwin-nodecheck
+
+crdsAutoUpgrade:
+  names:
+    job: hexlet-5-gwin-upgrade-crds
+    serviceAccount: hexlet-5-gwin-upgrade-crds
+    clusterRole: hexlet-5-gwin-upgrade-crds
+    clusterRoleBinding: hexlet-5-gwin-upgrade-crds
+    configMap: hexlet-5-gwin-upgrade-crds
