@@ -7,9 +7,21 @@ TERRAFORM ?= terraform
 KUBECTL ?= kubectl
 HELM ?= helm
 
-IMAGE_REPOSITORY ?= autobol4ik/hexlet-5-bulletin-board
-IMAGE_TAG ?= local
-DOCKERHUB_USER ?= autobol4ik
+APP_SOURCE_REF := e2a10825742b2bd281051653ec72ec27a2c5494b
+APP_IMAGE_REPOSITORY ?= autobol4ik/hexlet-5-bulletin-board
+
+COMPOSE_PROJECT_NAME ?= hexlet-5-local
+COMPOSE := $(DOCKER) compose --project-name "$(COMPOSE_PROJECT_NAME)" \
+	--file docker-compose.yaml
+LOCAL_DB_PASSWORD ?= hexlet-5-local-db-password
+LOCAL_S3_ACCESS_KEY ?= hexlet5local
+LOCAL_S3_SECRET_KEY ?= hexlet-5-local-s3-secret-key
+COMPOSE_ENV := HEXLET_5_APP_IMAGE="$(APP_IMAGE_REPOSITORY):$(APP_SOURCE_REF)" \
+	HEXLET_5_DB_PASSWORD="$(LOCAL_DB_PASSWORD)" \
+	HEXLET_5_S3_ACCESS_KEY="$(LOCAL_S3_ACCESS_KEY)" \
+	HEXLET_5_S3_SECRET_KEY="$(LOCAL_S3_SECRET_KEY)"
+LOCAL_APPLICATION_URL ?= http://127.0.0.1:18080
+LOCAL_MANAGEMENT_URL ?= http://127.0.0.1:19090
 
 NAMESPACE ?= hexlet-5
 HELM_RELEASE ?= hexlet-5
@@ -40,59 +52,80 @@ PROMETHEUS_CHART_VERSION := 86.2.3-1
 FLUENT_BIT_CHART := oci://cr.yandex/yc-marketplace/yandex-cloud/fluent-bit/charts/fluent-bit
 FLUENT_BIT_CHART_VERSION := 5.0.0
 
-.PHONY: help test start run update-gradle update-deps install build lint lint-fix \
-	docker-build docker-login docker-push terraform-fmt terraform-validate \
+.PHONY: help setup check test lint boundary validate-app-source-ref \
+	compose-config compose-up compose-down compose-smoke print-app-source-ref \
+	terraform-fmt terraform-validate \
 	terraform-bootstrap-init terraform-bootstrap-plan terraform-bootstrap-apply \
 	terraform-init terraform-plan terraform-apply terraform-scale-plan \
 	terraform-scale-apply kubeconfig context-check raw-secret raw-deploy \
-	raw-scale raw-status platform-namespaces gwin-install eso-install \
+	raw-scale raw-status raw-check observability-check platform-namespaces \
+	gwin-install eso-install \
 	prometheus-install fluent-bit-install helm-check helm-adopt helm-deploy \
 	helm-history helm-rollback
 
 help:
-	@echo "Application: make test | run | build | lint"
-	@echo "Image: make docker-build | docker-login | docker-push"
+	@echo "Validation: make check"
+	@echo "Local stack: make compose-up | compose-smoke | compose-down"
 	@echo "Terraform: make terraform-bootstrap-plan | terraform-plan | terraform-scale-plan"
 	@echo "Kubernetes: make raw-deploy | raw-scale | helm-adopt | helm-deploy"
 
-test:
-	./gradlew test
+setup: check
 
-start: run
+check: lint test
 
-run:
-	./gradlew bootRun
+test: terraform-validate raw-check observability-check compose-config
 
-update-gradle:
-	./gradlew wrapper --gradle-version 9.2.1
+lint: boundary validate-app-source-ref terraform-fmt helm-check
 
-update-deps:
-	./gradlew refreshVersions
+boundary:
+	@for path in src frontend gradle Dockerfile build.gradle.kts \
+		settings.gradle.kts gradlew gradlew.bat public versions.properties \
+		ansible; do \
+		test ! -e "$$path" || { \
+			echo "$$path belongs in the application repository"; \
+			exit 1; \
+		}; \
+	done
 
-install:
-	./gradlew dependencies
+validate-app-source-ref:
+	@printf '%s\n' "$(APP_SOURCE_REF)" | grep -Eq '^[0-9a-f]{40}$$'
 
-build:
-	./gradlew build
+compose-config: validate-app-source-ref
+	$(COMPOSE_ENV) $(COMPOSE) config --quiet
 
-lint:
-	./gradlew spotlessCheck
+compose-up: validate-app-source-ref
+	$(COMPOSE_ENV) $(COMPOSE) up --detach --wait --wait-timeout 240
 
-lint-fix:
-	./gradlew spotlessApply
+compose-down:
+	$(COMPOSE_ENV) $(COMPOSE) down --remove-orphans
 
-docker-build:
-	$(DOCKER) build --tag "$(IMAGE_REPOSITORY):$(IMAGE_TAG)" .
-
-docker-login:
-	test -n "$(DOCKERHUB_USER)"
-	$(DOCKER) login --username "$(DOCKERHUB_USER)"
-
-docker-push:
-	[[ "$(IMAGE_TAG)" =~ ^[0-9a-f]{40}$$ ]]
-	$(DOCKER) push "$(IMAGE_REPOSITORY):$(IMAGE_TAG)"
-	$(DOCKER) tag "$(IMAGE_REPOSITORY):$(IMAGE_TAG)" "$(IMAGE_REPOSITORY):latest"
-	$(DOCKER) push "$(IMAGE_REPOSITORY):latest"
+compose-smoke: compose-up
+	curl --fail --silent --show-error \
+		"$(LOCAL_MANAGEMENT_URL)/actuator/health/readiness" | \
+		jq --exit-status '.status == "UP"' >/dev/null
+	curl --fail --silent --show-error \
+		"$(LOCAL_MANAGEMENT_URL)/actuator/prometheus" >/dev/null
+	test "$$($(COMPOSE_ENV) $(COMPOSE) exec --no-TTY application id -u)" = 10001
+	upload="$$(curl --fail --silent --show-error \
+		--form file=@docs/evidence/dashboard.png \
+		"$(LOCAL_APPLICATION_URL)/api/files/upload")"; \
+	key="$$(printf '%s' "$$upload" | jq --exit-status --raw-output '.key')"; \
+	object_url="$$(curl --fail --silent --show-error --get \
+		--data-urlencode "key=$$key" \
+		"$(LOCAL_APPLICATION_URL)/api/files/view" | \
+		jq --exit-status --raw-output '.url')"; \
+	curl --fail --silent --show-error "$$object_url" >/dev/null; \
+	payload="$$(jq --null-input --compact-output --arg image_key "$$key" \
+		'{title:"hexlet-5 compose smoke",description:"PostgreSQL and MinIO smoke",state:"PUBLISHED",contact:"smoke@example.com",price:1,imageKey:$$image_key}')"; \
+	bulletin_id="$$(curl --fail --silent --show-error \
+		--header 'Content-Type: application/json' \
+		--request POST --data "$$payload" \
+		"$(LOCAL_APPLICATION_URL)/api/bulletins" | \
+		jq --exit-status --raw-output '.id')"; \
+	curl --fail --silent --show-error \
+		"$(LOCAL_APPLICATION_URL)/api/bulletins/$$bulletin_id" >/dev/null; \
+	curl --fail --silent --show-error --request DELETE \
+		"$(LOCAL_APPLICATION_URL)/api/bulletins/$$bulletin_id" >/dev/null
 
 terraform-fmt:
 	$(TERRAFORM) fmt -check -recursive terraform
@@ -173,20 +206,18 @@ raw-secret: context-check
 		--from-env-file="$(APP_SECRET_ENV_FILE)" \
 		--dry-run=client --output yaml | $(KUBECTL) apply --filename -
 
-raw-deploy: context-check
-	[[ "$(IMAGE_TAG)" =~ ^[0-9a-f]{40}$$ ]]
+raw-deploy: context-check validate-app-source-ref
 	$(KUBECTL) kustomize k8s/raw | \
-		sed 's|autobol4ik/hexlet-5-bulletin-board:REPLACE_WITH_FULL_GIT_SHA|$(IMAGE_REPOSITORY):$(IMAGE_TAG)|g' | \
+		sed 's|autobol4ik/hexlet-5-bulletin-board:REPLACE_WITH_FULL_GIT_SHA|$(APP_IMAGE_REPOSITORY):$(APP_SOURCE_REF)|g' | \
 		$(KUBECTL) apply --filename -
 	$(KUBECTL) --namespace "$(NAMESPACE)" rollout status \
 		deployment/hexlet-5-bulletin-board --timeout=10m
 
-raw-scale: context-check
-	[[ "$(IMAGE_TAG)" =~ ^[0-9a-f]{40}$$ ]]
+raw-scale: context-check validate-app-source-ref
 	[[ "$(GWIN_SECURITY_GROUP_ID)" =~ ^[a-z0-9]+$$ ]]
 	$(KUBECTL) kustomize k8s/scaled | \
 		sed \
-			-e 's|autobol4ik/hexlet-5-bulletin-board:REPLACE_WITH_FULL_GIT_SHA|$(IMAGE_REPOSITORY):$(IMAGE_TAG)|g' \
+			-e 's|autobol4ik/hexlet-5-bulletin-board:REPLACE_WITH_FULL_GIT_SHA|$(APP_IMAGE_REPOSITORY):$(APP_SOURCE_REF)|g' \
 			-e 's|REPLACE_WITH_GWIN_SECURITY_GROUP_ID|$(GWIN_SECURITY_GROUP_ID)|g' | \
 		$(KUBECTL) apply --filename -
 	$(KUBECTL) --namespace "$(NAMESPACE)" rollout status \
@@ -196,6 +227,16 @@ raw-status: context-check
 	$(KUBECTL) get nodes
 	$(KUBECTL) --namespace "$(NAMESPACE)" get pods --output wide
 	$(KUBECTL) --namespace "$(NAMESPACE)" get service,ingress
+
+raw-check:
+	$(KUBECTL) kustomize k8s/raw >/dev/null
+	$(KUBECTL) kustomize k8s/scaled >/dev/null
+
+observability-check:
+	bash -n k8s/platform/prometheus/post-renderer.sh
+	$(DOCKER) run --rm --entrypoint promtool \
+		--volume "$(CURDIR)/k8s/platform/prometheus:/work:ro" \
+		--workdir /work prom/prometheus:v3.12.0 check rules rules.yaml
 
 platform-namespaces: context-check
 	$(KUBECTL) apply --filename k8s/platform/namespaces.yaml
@@ -240,28 +281,32 @@ fluent-bit-install: context-check
 		--atomic --wait --timeout 10m
 
 helm-check:
-	$(HELM) lint "$(CHART_DIR)"
+	$(HELM) lint "$(CHART_DIR)" \
+		--set-string image.tag="$(APP_SOURCE_REF)"
 	$(HELM) template "$(HELM_RELEASE)" "$(CHART_DIR)" \
-		--namespace "$(NAMESPACE)" >/dev/null
+		--namespace "$(NAMESPACE)" \
+		--set-string image.tag="$(APP_SOURCE_REF)" >/dev/null
 	$(HELM) lint "$(CHART_DIR)" --values "$(PRODUCTION_VALUES)" \
+		--set-string image.tag="$(APP_SOURCE_REF)" \
 		--set-string ingress.securityGroupId=hexlet-5-validation \
 		--set-string externalSecret.lockboxId=hexlet5validation
 	$(HELM) template "$(HELM_RELEASE)" "$(CHART_DIR)" \
 		--namespace "$(NAMESPACE)" --values "$(PRODUCTION_VALUES)" \
+		--set-string image.tag="$(APP_SOURCE_REF)" \
 		--set-string ingress.securityGroupId=hexlet-5-validation \
 		--set-string externalSecret.lockboxId=hexlet5validation >/dev/null
 
 helm-adopt: HELM_ADOPTION_ARGS := --take-ownership
 helm-adopt: helm-deploy
 
-helm-deploy: context-check
-	[[ "$(IMAGE_TAG)" =~ ^[0-9a-f]{40}$$ ]]
+helm-deploy: context-check validate-app-source-ref
 	test -n "$(GWIN_SECURITY_GROUP_ID)"
 	test -n "$(LOCKBOX_ID)"
 	$(HELM) upgrade --install "$(HELM_RELEASE)" "$(CHART_DIR)" \
 		--namespace "$(NAMESPACE)" --create-namespace \
 		--values "$(PRODUCTION_VALUES)" \
-		--set-string image.tag="$(IMAGE_TAG)" \
+		--set-string image.repository="$(APP_IMAGE_REPOSITORY)" \
+		--set-string image.tag="$(APP_SOURCE_REF)" \
 		--set-string existingSecret="$(MANAGED_SECRET_NAME)" \
 		--set-string externalSecret.targetSecretName="$(MANAGED_SECRET_NAME)" \
 		--set-string ingress.securityGroupId="$(GWIN_SECURITY_GROUP_ID)" \
@@ -282,3 +327,6 @@ helm-rollback: context-check
 		--namespace "$(NAMESPACE)" --wait --timeout 10m
 	$(KUBECTL) --namespace "$(NAMESPACE)" rollout status \
 		deployment/hexlet-5-bulletin-board --timeout=10m
+
+print-app-source-ref:
+	@printf '%s\n' "$(APP_SOURCE_REF)"
