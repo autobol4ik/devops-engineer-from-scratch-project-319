@@ -1,0 +1,163 @@
+---
+name: Infrastructure CI/CD
+
+"on":
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: autobol4ik/hexlet-5-bulletin-board
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      app-source-ref: ${{ steps.source.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.6
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.34.0
+      - name: Validate infrastructure repository
+        run: make check
+      - name: Read pinned application revision
+        id: source
+        run: |
+          ref="$(make --silent print-app-source-ref)"
+          printf '%s\n' "$ref" | grep -Eq '^[0-9a-f]{40}$'
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  image:
+    needs:
+      - validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - name: Check pinned application image
+        env:
+          APP_SOURCE_REF: ${{ needs.validate.outputs.app-source-ref }}
+        run: docker buildx imagetools inspect "$IMAGE_NAME:$APP_SOURCE_REF"
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - validate
+      - image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: hexlet-5-production
+      cancel-in-progress: false
+    env:
+      YC_DEPLOY_SA_ID: ${{ vars.YC_DEPLOY_SA_ID }}
+      YC_CLUSTER_ID: ${{ vars.YC_CLUSTER_ID }}
+      YC_FOLDER_ID: ${{ vars.YC_FOLDER_ID }}
+      YC_GWIN_SECURITY_GROUP_ID: ${{ vars.YC_GWIN_SECURITY_GROUP_ID }}
+      YC_LOCKBOX_ID: ${{ vars.YC_LOCKBOX_ID }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.6
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.34.0
+      - name: Request GitHub OIDC token
+        id: oidc
+        uses: actions/github-script@v8
+        env:
+          OIDC_AUDIENCE: https://github.com/autobol4ik
+        with:
+          result-encoding: string
+          script: return await core.getIDToken(process.env.OIDC_AUDIENCE)
+      - name: Exchange OIDC token for a Yandex IAM token
+        env:
+          GITHUB_OIDC_TOKEN: ${{ steps.oidc.outputs.result }}
+        run: |
+          set -euo pipefail
+          test -n "$YC_DEPLOY_SA_ID"
+          response="$(
+            curl --fail --silent --show-error \
+              --request POST https://auth.yandex.cloud/oauth/token \
+              --header 'Content-Type: application/x-www-form-urlencoded' \
+              --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+              --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+              --data-urlencode "audience=$YC_DEPLOY_SA_ID" \
+              --data-urlencode "subject_token=$GITHUB_OIDC_TOKEN" \
+              --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token'
+          )"
+          yc_token="$(jq -er '.access_token' <<< "$response")"
+          echo "::add-mask::$yc_token"
+          printf 'YC_IAM_TOKEN=%s\n' "$yc_token" >> "$GITHUB_ENV"
+      - name: Install Yandex Cloud CLI
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            https://storage.yandexcloud.net/yandexcloud-yc/install.sh \
+            --output "$RUNNER_TEMP/install-yc.sh"
+          bash "$RUNNER_TEMP/install-yc.sh" \
+            -i "$RUNNER_TEMP/yandex-cloud" -n
+          echo "$RUNNER_TEMP/yandex-cloud/bin" >> "$GITHUB_PATH"
+      - name: Create temporary kubeconfig
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+        run: |
+          set -euo pipefail
+          test -n "$YC_CLUSTER_ID"
+          test -n "$YC_FOLDER_ID"
+          yc config set folder-id "$YC_FOLDER_ID"
+          yc managed-kubernetes cluster get-credentials \
+            --id "$YC_CLUSTER_ID" --external --force \
+            --kubeconfig "$KUBECONFIG"
+          kubectl config current-context
+      - name: Deploy pinned application image
+        env:
+          APP_SOURCE_REF: ${{ needs.validate.outputs.app-source-ref }}
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+        run: |
+          set -euo pipefail
+          [[ "$APP_SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]
+          test -n "$YC_GWIN_SECURITY_GROUP_ID"
+          test -n "$YC_LOCKBOX_ID"
+          helm upgrade --install hexlet-5 k8s/bulletin-board \
+            --namespace hexlet-5 \
+            --create-namespace \
+            --values k8s/bulletin-board/values-prod.yaml \
+            --set-string image.repository="$IMAGE_NAME" \
+            --set-string image.tag="$APP_SOURCE_REF" \
+            --set-string existingSecret=hexlet-5-app-managed \
+            --set-string externalSecret.targetSecretName=hexlet-5-app-managed \
+            --set-string ingress.securityGroupId="$YC_GWIN_SECURITY_GROUP_ID" \
+            --set-string externalSecret.lockboxId="$YC_LOCKBOX_ID" \
+            --atomic --wait --timeout 10m
+          kubectl --namespace hexlet-5 wait \
+            --for=condition=Ready \
+            externalsecret/hexlet-5-bulletin-board --timeout=5m
+          kubectl rollout status deployment/hexlet-5-bulletin-board \
+            --namespace hexlet-5 --timeout=10m
+          deployed_image="$(
+            kubectl --namespace hexlet-5 get \
+              deployment/hexlet-5-bulletin-board \
+              --output jsonpath='{.spec.template.spec.containers[0].image}'
+          )"
+          test "$deployed_image" = "$IMAGE_NAME:$APP_SOURCE_REF"
+      - name: Remove temporary credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kubeconfig"

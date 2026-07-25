@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: hexlet-5-bulletin-board
+  namespace: hexlet-5
+  labels:
+    app.kubernetes.io/name: bulletin-board
+    app.kubernetes.io/instance: hexlet-5
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bulletin-board
+      app.kubernetes.io/instance: hexlet-5

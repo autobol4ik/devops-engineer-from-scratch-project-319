@@ -1,0 +1,2 @@
+# Stage 4 scales the same fixed-size node group from one worker to two.
+worker_count = 2

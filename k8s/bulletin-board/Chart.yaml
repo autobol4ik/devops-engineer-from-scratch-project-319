@@ -1,0 +1,5 @@
+apiVersion: v2
+name: bulletin-board
+description: Hexlet project 319 bulletin board deployment
+type: application
+version: 0.1.0

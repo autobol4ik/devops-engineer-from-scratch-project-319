@@ -1,0 +1,9 @@
+.env
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+terraform/backend.hcl
+crash.log
+crash.*.log

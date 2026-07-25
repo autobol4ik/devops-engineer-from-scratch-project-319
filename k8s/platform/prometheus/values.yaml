@@ -1,0 +1,150 @@
+# Chart: oci://cr.yandex/yc-marketplace/yandex-cloud/prometheus/charts/kube-prometheus-stack
+# Version: 86.2.3-1
+# OCI manifest: sha256:bd5887bf38e94cc8cf4f9537301fd46faedf1cd17693c57963590e5912e62175
+#
+# This Marketplace chart renders `secretAccessKey` as a plaintext bearerToken.
+# The checked-in sentinel is mandatory: post-renderer.sh replaces both unsafe
+# fields with authorization.credentials references to the ESO-managed Secret.
+# Metric allowlists are applied by each ServiceMonitor before samples enter the
+# WAL. The post-renderer only removes high-cardinality labels from remote write,
+# so the dropped-samples counter remains a transport-health signal.
+# Always install or upgrade this chart with `--post-renderer post-renderer.sh`.
+
+prometheusWorkspaceId: REPLACE_WITH_MONITORING_WORKSPACE_ID
+iam_api_key_value: ""
+iam_api_key_value_generated:
+  serviceAccountID: ""
+  secretAccessKey: __HEXLET_5_POST_RENDERER_TOKEN__
+
+defaultRules:
+  create: false
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: false
+
+kubeApiServer:
+  enabled: false
+
+kubelet:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    kubelet: false
+    probes: false
+    resource: false
+    cAdvisor: true
+    interval: 30s
+    cAdvisorInterval: 30s
+    cAdvisorMetricRelabelings:
+      - action: keep
+        sourceLabels:
+          - __name__
+        regex: ^(container_cpu_usage_seconds_total|container_memory_working_set_bytes)$
+      - action: keep
+        sourceLabels:
+          - namespace
+        regex: ^hexlet-5$
+
+kubeControllerManager:
+  enabled: false
+
+coreDns:
+  enabled: false
+
+kubeDns:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: true
+
+kube-state-metrics:
+  selfMonitor:
+    enabled: false
+  prometheus:
+    monitor:
+      http:
+        metricRelabelings:
+          - action: keep
+            sourceLabels:
+              - __name__
+            regex: ^(kube_pod_(container_status_ready|container_status_restarts_total|status_phase)|kube_deployment_status_replicas(_available)?)$
+          - action: keep
+            sourceLabels:
+              - namespace
+            regex: ^hexlet-5$
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+nodeExporter:
+  enabled: false
+
+prometheusOperator:
+  serviceMonitor:
+    selfMonitor: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  prometheusConfigReloader:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+prometheus:
+  serviceMonitor:
+    selfMonitor: true
+    metricRelabelings:
+      - action: keep
+        sourceLabels:
+          - __name__
+        regex: ^prometheus_remote_storage_samples_(failed|dropped)_total$
+  prometheusSpec:
+    disableAlerting: true
+    replicas: 1
+    shards: 1
+    retention: 24h
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    externalLabels:
+      project: hexlet-5
+      cluster: hexlet-5-k8s
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - hexlet-5
+            - hexlet-5-monitoring
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi

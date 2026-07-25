@@ -1,0 +1,21 @@
+cloud_id  = "replace-with-cloud-id"
+folder_id = "replace-with-folder-id"
+
+# The initial assignment stage uses one worker. Apply production.tfvars.example
+# later to scale to two workers without changing the configuration.
+worker_count = 1
+
+# Blue is the only key initially. Follow the staged rotation procedure in the
+# root README before changing the slots.
+application_s3_keys = {
+  active = "blue"
+  slots  = ["blue"]
+}
+
+# Restrict this list when a fixed runner or administrative source CIDR exists.
+# GitHub-hosted runners have dynamic addresses, so the public CI profile uses 0/0.
+api_allowed_cidrs = ["0.0.0.0/0"]
+
+# The provider cannot create a Managed Service for Prometheus workspace.
+# Add the ID after creating the workspace through the supported console or API.
+monitoring_workspace_id = ""

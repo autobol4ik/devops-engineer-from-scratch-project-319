@@ -1,0 +1,49 @@
+# Chart: oci://cr.yandex/yc-marketplace/yandex-cloud/external-secrets/charts/external-secrets
+# Version: 2.5.0-2
+# OCI manifest: sha256:cfecae0dbab58d1e4e367c27577629b8fd90cbc3e50558288ed29fa36d673312
+
+replicaCount: 1
+leaderElect: false
+installCRDs: true
+
+crds:
+  createClusterExternalSecret: false
+  createClusterSecretStore: false
+  createSecretStore: true
+  createClusterGenerator: false
+  createClusterPushSecret: false
+  createPushSecret: false
+  unsafeServeV1Beta1: false
+
+processClusterExternalSecret: false
+processClusterPushSecret: false
+processClusterStore: false
+processSecretStore: true
+processClusterGenerator: false
+processPushSecret: false
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 96Mi
+
+certController:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 96Mi

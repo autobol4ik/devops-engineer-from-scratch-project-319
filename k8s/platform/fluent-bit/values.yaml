@@ -1,0 +1,89 @@
+# Chart: oci://cr.yandex/yc-marketplace/yandex-cloud/fluent-bit/charts/fluent-bit
+# Version: 5.0.0
+# OCI manifest: sha256:fc400d890e41deb7b636f29481c9b3a42277e0f4513ab6dd8c896f094f0d177e
+
+loggingGroupId: REPLACE_WITH_LOG_GROUP_ID
+
+ycServiceAccount:
+  workloadIdentityFederation:
+    serviceAccountID: REPLACE_WITH_LOGGING_SERVICE_ACCOUNT_ID
+
+serviceAccount:
+  create: true
+  name: hexlet-5-fluent-bit
+  automountServiceAccountToken: true
+
+testFramework:
+  enabled: false
+
+rbac:
+  create: true
+  nodeAccess: false
+  eventsAccess: false
+
+serviceMonitor:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
+config:
+  inputs: |
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*_hexlet-5_*.log
+        multiline.parser  docker, cri
+        Tag               kube.*
+        Mem_Buf_Limit     5MB
+        Skip_Long_Lines   On
+        Refresh_Interval  10
+
+  filters: |
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Merge_Log           On
+        Keep_Log            Off
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude On
+
+    [FILTER]
+        Name       grep
+        Match      kube.*
+        Logical_Op AND
+        Regex      $kubernetes['namespace_name'] ^hexlet-5$
+        Regex      $kubernetes['container_name'] ^application$
+
+  outputs: |
+    [OUTPUT]
+        Name            yc-logging
+        Match           kube.*
+        group_id        {{ .Values.loggingGroupId }}
+        resource_type   {kubernetes/namespace_name}
+        resource_id     {kubernetes/pod_name}
+        stream_name     {kubernetes/host}
+        message_key     message
+        level_key       level
+        default_level   INFO
+        authorization   instance-service-account
