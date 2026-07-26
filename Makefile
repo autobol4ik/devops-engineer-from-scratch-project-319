@@ -6,6 +6,7 @@ DOCKER ?= docker
 TERRAFORM ?= terraform
 KUBECTL ?= kubectl
 HELM ?= helm
+YC ?= yc
 
 APP_SOURCE_REF := e2a10825742b2bd281051653ec72ec27a2c5494b
 APP_IMAGE_REPOSITORY ?= autobol4ik/hexlet-5-bulletin-board
@@ -41,6 +42,12 @@ BACKEND_CONFIG ?= backend.hcl
 KUBECONFIG ?= /tmp/hexlet-5-kubeconfig
 export KUBECONFIG
 
+KUBERNETES_CLUSTER_NAME ?= hexlet-5-cluster
+KUBERNETES_NODE_GROUP_NAME ?= hexlet-5-workers
+POSTGRESQL_CLUSTER_NAME ?= hexlet-5-postgresql
+GWIN_LOAD_BALANCER_NAME ?= gwin-ingress-group-hexlet-5-bulletin-board
+RUNTIME_SCRIPT := scripts/runtime.sh
+
 GWIN_CHART := oci://cr.yandex/yc-marketplace/yandex-cloud/gwin/charts/gwin-chart
 GWIN_CHART_VERSION := v1.8.2
 ESO_CHART := oci://cr.yandex/yc-marketplace/yandex-cloud/external-secrets/charts/external-secrets
@@ -55,7 +62,8 @@ FLUENT_BIT_CHART_VERSION := 5.0.0
 	terraform-fmt terraform-validate \
 	terraform-bootstrap-init terraform-bootstrap-plan terraform-bootstrap-apply \
 	terraform-init terraform-plan terraform-apply terraform-scale-plan \
-	terraform-scale-apply kubeconfig context-check raw-secret raw-deploy \
+	terraform-scale-apply runtime-status runtime-start runtime-stop \
+	kubeconfig context-check raw-secret raw-deploy \
 	raw-scale raw-status raw-check observability-check platform-namespaces \
 	gwin-install eso-install \
 	prometheus-install fluent-bit-install helm-check helm-adopt helm-deploy \
@@ -65,6 +73,7 @@ help:
 	@echo "Validation: make check"
 	@echo "Local stack: make compose-up | compose-down"
 	@echo "Terraform: make terraform-bootstrap-plan | terraform-plan | terraform-scale-plan"
+	@echo "Runtime: make runtime-status | runtime-start | runtime-stop"
 	@echo "Kubernetes: make raw-deploy | raw-scale | helm-adopt | helm-deploy"
 
 check: boundary validate-app-source-ref terraform-fmt terraform-validate \
@@ -152,6 +161,17 @@ terraform-scale-apply: terraform-init
 	TF_DATA_DIR="$(MAIN_TF_DATA)" $(TERRAFORM) \
 		-chdir=terraform apply -var-file="$(MAIN_VAR_FILE)" \
 		-var-file="$(PRODUCTION_VAR_FILE)"
+
+runtime-status runtime-start runtime-stop: terraform-init
+	TF_DATA_DIR="$(MAIN_TF_DATA)" \
+	TERRAFORM="$(TERRAFORM)" \
+	YC="$(YC)" \
+	KUBERNETES_CLUSTER_NAME="$(KUBERNETES_CLUSTER_NAME)" \
+	KUBERNETES_NODE_GROUP_NAME="$(KUBERNETES_NODE_GROUP_NAME)" \
+	POSTGRESQL_CLUSTER_NAME="$(POSTGRESQL_CLUSTER_NAME)" \
+	GWIN_LOAD_BALANCER_NAME="$(GWIN_LOAD_BALANCER_NAME)" \
+	DRY_RUN="$(DRY_RUN)" \
+	bash "$(RUNTIME_SCRIPT)" "$(@:runtime-%=%)"
 
 kubeconfig: terraform-init
 	cluster_id="$$(TF_DATA_DIR="$(MAIN_TF_DATA)" $(TERRAFORM) \

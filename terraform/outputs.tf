@@ -12,6 +12,11 @@ output "kubernetes_cluster_id" {
   value       = yandex_kubernetes_cluster.main.id
 }
 
+output "postgresql_cluster_id" {
+  description = "Managed PostgreSQL cluster ID used by runtime lifecycle commands."
+  value       = yandex_mdb_postgresql_cluster.database.id
+}
+
 output "kubernetes_external_endpoint" {
   description = "Public Kubernetes API endpoint."
   value       = yandex_kubernetes_cluster.main.master[0].external_v4_endpoint
@@ -87,6 +92,16 @@ output "eso_authorized_key_json" {
     public_key         = yandex_iam_service_account_key.external_secrets.public_key
     private_key        = yandex_iam_service_account_key.external_secrets.private_key
   })
+  sensitive = true
+}
+
+output "monitoring_api_key" {
+  description = "Monitoring API key and fixed active-slot metadata. sensitive redacts CLI output but the key still exists in remote state."
+  value = {
+    active_slot = "blue"
+    key_ids     = { for slot, key in yandex_iam_service_account_api_key.monitoring : slot => key.id }
+    secret_key  = yandex_iam_service_account_api_key.monitoring["blue"].secret_key
+  }
   sensitive = true
 }
 

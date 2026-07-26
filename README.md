@@ -93,10 +93,38 @@ make terraform-scale-plan
 make terraform-scale-apply
 ```
 
+The initial variable example starts with the blue application key. The
+production override records the completed rotation and keeps only the active
+green key.
+
+Runtime lifecycle commands resolve the Kubernetes cluster, its worker node
+group and the PostgreSQL cluster by their Terraform state IDs. The worker group
+must have the exact `KUBERNETES_NODE_GROUP_NAME` and belong to that exact
+cluster. The commands then require exactly one Application Load Balancer whose
+name equals `GWIN_LOAD_BALANCER_NAME` in the same folder; any identity,
+relationship or cardinality mismatch stops the operation before a change.
+Inspect the current state and preview either transition first:
+
+```bash
+make runtime-status
+DRY_RUN=1 make runtime-start
+DRY_RUN=1 make runtime-stop
+```
+
+After checking the preview, omit `DRY_RUN=1` to perform the selected
+transition. Yandex Cloud starts or stops a Kubernetes cluster together with all
+its node groups; the script discovers the worker group separately and verifies
+its resulting status before continuing. Startup orders PostgreSQL, the
+cluster/master with its workers, the exact worker status gate and the load
+balancer. Shutdown removes load-balancer traffic first, stops the
+cluster/workers jointly, verifies the worker group is stopped and then stops
+PostgreSQL. It does not scale the Terraform-managed group to zero or create
+configuration drift.
+
 The main state stays in the S3 backend and must never be committed. Important
-outputs include the cluster and node-group IDs, kubeconfig command, PostgreSQL
-connection, application S3 credentials, Lockbox ID, security groups, log group
-and workload identities.
+outputs include the Kubernetes and PostgreSQL cluster IDs, node-group ID,
+kubeconfig command, PostgreSQL connection, application S3 credentials, Lockbox
+ID, security groups, log group and workload identities.
 
 Create an isolated kubeconfig and record its exact context:
 

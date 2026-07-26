@@ -68,7 +68,7 @@ resource "yandex_iam_service_account_api_key" "monitoring" {
   for_each = toset(["blue"])
 
   service_account_id = yandex_iam_service_account.monitoring.id
-  description        = "Project 319 Monitoring API key"
+  description        = "Project 319 Monitoring API key (blue rotation slot)"
   scopes             = ["yc.monitoring.manage"]
 
   lifecycle {
