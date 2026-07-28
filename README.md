@@ -5,6 +5,9 @@
 
 Live application: [https://hexlet-5.duckdns.org/#/bulletins](https://hexlet-5.duckdns.org/#/bulletins)
 
+The public endpoint uses HTTPS with a certificate managed by Yandex Certificate
+Manager.
+
 The application runs in Yandex Managed Service for Kubernetes. Terraform
 provisions the network, two-stage worker capacity, Managed PostgreSQL, Object
 Storage, Lockbox, Cloud Logging and workload identities. Raw Kubernetes
