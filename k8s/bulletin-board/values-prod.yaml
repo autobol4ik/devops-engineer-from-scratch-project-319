@@ -17,7 +17,7 @@ ingress:
   acmeValidation:
     enabled: true
   tls:
-    enabled: false
+    enabled: true
 
 podDisruptionBudget:
   enabled: true
