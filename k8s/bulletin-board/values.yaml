@@ -55,7 +55,13 @@ ingress:
   groupName: hexlet-5-bulletin-board
   externalIPv4Address: auto
   securityGroupId: ""
+  host: ""
   path: /
+  certificateId: ""
+  acmeValidation:
+    enabled: false
+  tls:
+    enabled: false
 
 podDisruptionBudget:
   enabled: false

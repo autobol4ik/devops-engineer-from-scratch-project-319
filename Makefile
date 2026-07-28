@@ -8,7 +8,7 @@ KUBECTL ?= kubectl
 HELM ?= helm
 YC ?= yc
 
-APP_SOURCE_REF := e2a10825742b2bd281051653ec72ec27a2c5494b
+APP_SOURCE_REF := fcf2d79d30a63707e4832f24e3cbf1f3628be95c
 APP_IMAGE_REPOSITORY ?= autobol4ik/hexlet-5-bulletin-board
 
 COMPOSE_PROJECT_NAME ?= hexlet-5-local
@@ -27,6 +27,7 @@ HELM_RELEASE ?= hexlet-5
 CHART_DIR := k8s/bulletin-board
 PRODUCTION_VALUES := $(CHART_DIR)/values-prod.yaml
 MANAGED_SECRET_NAME ?= hexlet-5-app-managed
+CERTIFICATE_ID ?=
 HELM_ADOPTION_ARGS ?=
 APP_SECRET_ENV_FILE ?= .env
 
@@ -274,11 +275,20 @@ helm-check:
 	$(HELM) lint "$(CHART_DIR)" --values "$(PRODUCTION_VALUES)" \
 		--set-string image.tag="$(APP_SOURCE_REF)" \
 		--set-string ingress.securityGroupId=hexlet-5-validation \
+		--set-string ingress.certificateId=hexlet5validation \
 		--set-string externalSecret.lockboxId=hexlet5validation
 	$(HELM) template "$(HELM_RELEASE)" "$(CHART_DIR)" \
 		--namespace "$(NAMESPACE)" --values "$(PRODUCTION_VALUES)" \
 		--set-string image.tag="$(APP_SOURCE_REF)" \
 		--set-string ingress.securityGroupId=hexlet-5-validation \
+		--set-string ingress.certificateId=hexlet5validation \
+		--set-string externalSecret.lockboxId=hexlet5validation >/dev/null
+	$(HELM) template "$(HELM_RELEASE)" "$(CHART_DIR)" \
+		--namespace "$(NAMESPACE)" --values "$(PRODUCTION_VALUES)" \
+		--set-string image.tag="$(APP_SOURCE_REF)" \
+		--set-string ingress.securityGroupId=hexlet-5-validation \
+		--set-string ingress.certificateId=hexlet5validation \
+		--set ingress.tls.enabled=true \
 		--set-string externalSecret.lockboxId=hexlet5validation >/dev/null
 
 helm-adopt: HELM_ADOPTION_ARGS := --take-ownership
@@ -287,6 +297,7 @@ helm-adopt: helm-deploy
 helm-deploy: context-check validate-app-source-ref
 	test -n "$(GWIN_SECURITY_GROUP_ID)"
 	test -n "$(LOCKBOX_ID)"
+	test -n "$(CERTIFICATE_ID)"
 	$(HELM) upgrade --install "$(HELM_RELEASE)" "$(CHART_DIR)" \
 		--namespace "$(NAMESPACE)" --create-namespace \
 		--values "$(PRODUCTION_VALUES)" \
@@ -295,6 +306,7 @@ helm-deploy: context-check validate-app-source-ref
 		--set-string existingSecret="$(MANAGED_SECRET_NAME)" \
 		--set-string externalSecret.targetSecretName="$(MANAGED_SECRET_NAME)" \
 		--set-string ingress.securityGroupId="$(GWIN_SECURITY_GROUP_ID)" \
+		--set-string ingress.certificateId="$(CERTIFICATE_ID)" \
 		--set-string externalSecret.lockboxId="$(LOCKBOX_ID)" \
 		$(HELM_ADOPTION_ARGS) --atomic --wait --timeout 10m
 	$(KUBECTL) --namespace "$(NAMESPACE)" wait \

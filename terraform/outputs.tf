@@ -110,6 +110,15 @@ output "application_log_group_id" {
   value       = yandex_logging_group.application.id
 }
 
+output "application_certificate" {
+  description = "Managed TLS certificate attached to the Gwin HTTPS listener."
+  value = {
+    id     = yandex_cm_certificate.application.id
+    domain = local.application_domain
+    status = yandex_cm_certificate.application.status
+  }
+}
+
 output "monitoring_workspace_id" {
   description = "Externally created Managed Service for Prometheus workspace. An empty value means the manual precondition is still pending."
   value       = var.monitoring_workspace_id

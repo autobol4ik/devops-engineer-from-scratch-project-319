@@ -69,6 +69,7 @@ jobs:
       YC_DEPLOY_SA_ID: ${{ vars.YC_DEPLOY_SA_ID }}
       YC_CLUSTER_ID: ${{ vars.YC_CLUSTER_ID }}
       YC_FOLDER_ID: ${{ vars.YC_FOLDER_ID }}
+      YC_CERTIFICATE_ID: ${{ vars.YC_CERTIFICATE_ID }}
       YC_GWIN_SECURITY_GROUP_ID: ${{ vars.YC_GWIN_SECURITY_GROUP_ID }}
       YC_LOCKBOX_ID: ${{ vars.YC_LOCKBOX_ID }}
     steps:
@@ -135,6 +136,7 @@ jobs:
           set -euo pipefail
           [[ "$APP_SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]
           test -n "$YC_GWIN_SECURITY_GROUP_ID"
+          test -n "$YC_CERTIFICATE_ID"
           test -n "$YC_LOCKBOX_ID"
           helm upgrade --install hexlet-5 k8s/bulletin-board \
             --namespace hexlet-5 \
@@ -145,6 +147,7 @@ jobs:
             --set-string existingSecret=hexlet-5-app-managed \
             --set-string externalSecret.targetSecretName=hexlet-5-app-managed \
             --set-string ingress.securityGroupId="$YC_GWIN_SECURITY_GROUP_ID" \
+            --set-string ingress.certificateId="$YC_CERTIFICATE_ID" \
             --set-string externalSecret.lockboxId="$YC_LOCKBOX_ID" \
             --atomic --wait --timeout 10m
           kubectl --namespace hexlet-5 wait \

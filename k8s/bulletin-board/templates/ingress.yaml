@@ -2,26 +2,94 @@
 {{- if ne .Values.service.type "NodePort" }}
 {{- fail "Gwin Ingress requires service.type=NodePort" }}
 {{- end }}
+{{- $name := include "bulletin-board.fullname" . }}
+{{- $host := required "ingress.host is required" .Values.ingress.host }}
+{{- $groupName := required "ingress.groupName is required" .Values.ingress.groupName }}
+{{- $certificateId := required "ingress.certificateId is required" .Values.ingress.certificateId }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "bulletin-board.fullname" . }}
+  name: {{ $name }}
   labels:
     {{- include "bulletin-board.labels" . | nindent 4 }}
   annotations:
-    gwin.yandex.cloud/groupName: {{ required "ingress.groupName is required" .Values.ingress.groupName | quote }}
+    gwin.yandex.cloud/groupName: {{ $groupName | quote }}
+    gwin.yandex.cloud/groupOrder: "100"
     gwin.yandex.cloud/externalIPv4Address: {{ .Values.ingress.externalIPv4Address | quote }}
     gwin.yandex.cloud/securityGroups: {{ required "ingress.securityGroupId is required" .Values.ingress.securityGroupId | quote }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - http:
+    - host: {{ $host | quote }}
+      http:
         paths:
           - path: {{ .Values.ingress.path }}
             pathType: Prefix
             backend:
               service:
-                name: {{ include "bulletin-board.fullname" . }}
+                name: {{ $name }}
                 port:
                   number: {{ .Values.service.port }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      secretName: {{ printf "yc-certmgr-cert-id-%s" $certificateId | quote }}
+  {{- end }}
+{{- if .Values.ingress.acmeValidation.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-acme-validation" $name }}
+  labels:
+    {{- include "bulletin-board.labels" . | nindent 4 }}
+  annotations:
+    gwin.yandex.cloud/groupName: {{ $groupName | quote }}
+    gwin.yandex.cloud/groupOrder: "10"
+    gwin.yandex.cloud/redirect.acme-validation.replaceScheme: "https"
+    gwin.yandex.cloud/redirect.acme-validation.replaceHost: "validation.certificate-manager.api.cloud.yandex.net"
+    gwin.yandex.cloud/redirect.acme-validation.replacePort: "443"
+    gwin.yandex.cloud/redirect.acme-validation.path.replacePrefix: {{ printf "/%s/" $certificateId | quote }}
+    gwin.yandex.cloud/redirect.acme-validation.responseCode: "301"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /.well-known/acme-challenge/
+            pathType: Prefix
+            backend:
+              resource:
+                kind: Redirect
+                name: acme-validation
+{{- end }}
+{{- if .Values.ingress.tls.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-http-redirect" $name }}
+  labels:
+    {{- include "bulletin-board.labels" . | nindent 4 }}
+  annotations:
+    gwin.yandex.cloud/groupName: {{ $groupName | quote }}
+    gwin.yandex.cloud/groupOrder: "20"
+    gwin.yandex.cloud/redirect.https-redirect.replaceScheme: "https"
+    gwin.yandex.cloud/redirect.https-redirect.replacePort: "443"
+    gwin.yandex.cloud/redirect.https-redirect.responseCode: "301"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              resource:
+                kind: Redirect
+                name: https-redirect
+{{- end }}
 {{- end }}

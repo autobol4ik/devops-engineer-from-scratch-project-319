@@ -12,6 +12,12 @@ ingress:
   groupName: hexlet-5-bulletin-board
   externalIPv4Address: auto
   securityGroupId: REPLACE_WITH_GWIN_SECURITY_GROUP_ID
+  host: hexlet-5.duckdns.org
+  certificateId: REPLACE_WITH_CERTIFICATE_ID
+  acmeValidation:
+    enabled: true
+  tls:
+    enabled: false
 
 podDisruptionBudget:
   enabled: true

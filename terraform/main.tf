@@ -1,5 +1,6 @@
 locals {
-  project = "hexlet-5"
+  project            = "hexlet-5"
+  application_domain = "hexlet-5.duckdns.org"
 
   labels = {
     project     = local.project

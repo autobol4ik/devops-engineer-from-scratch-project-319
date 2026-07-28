@@ -17,7 +17,7 @@ resource "yandex_vpc_security_group" "nodes" {
 resource "yandex_vpc_security_group" "gwin" {
   folder_id   = var.folder_id
   name        = "${local.project}-gwin"
-  description = "Public HTTP ALB managed by Gwin"
+  description = "Public HTTP and HTTPS ALB managed by Gwin"
   network_id  = yandex_vpc_network.main.id
   labels      = local.labels
 }
@@ -124,6 +124,15 @@ resource "yandex_vpc_security_group_rule" "gwin_http" {
   description            = "Public HTTP"
   protocol               = "TCP"
   port                   = 80
+  v4_cidr_blocks         = ["0.0.0.0/0"]
+}
+
+resource "yandex_vpc_security_group_rule" "gwin_https" {
+  security_group_binding = yandex_vpc_security_group.gwin.id
+  direction              = "ingress"
+  description            = "Public HTTPS"
+  protocol               = "TCP"
+  port                   = 443
   v4_cidr_blocks         = ["0.0.0.0/0"]
 }
 
