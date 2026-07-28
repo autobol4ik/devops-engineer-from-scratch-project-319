@@ -3,7 +3,7 @@
 [![Actions Status](https://github.com/autobol4ik/devops-engineer-from-scratch-project-319/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/autobol4ik/devops-engineer-from-scratch-project-319/actions)
 [![CI](https://github.com/autobol4ik/devops-engineer-from-scratch-project-319/actions/workflows/ci.yml/badge.svg)](https://github.com/autobol4ik/devops-engineer-from-scratch-project-319/actions/workflows/ci.yml)
 
-Live application: [http://51.250.37.85](http://51.250.37.85)
+Live application: [https://hexlet-5.duckdns.org/#/bulletins](https://hexlet-5.duckdns.org/#/bulletins)
 
 The application runs in Yandex Managed Service for Kubernetes. Terraform
 provisions the network, two-stage worker capacity, Managed PostgreSQL, Object
